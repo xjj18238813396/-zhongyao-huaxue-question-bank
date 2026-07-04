@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>中药化学技术题库</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="title-row">
+        <div>
+          <h1>中药化学技术题库</h1>
+          <p class="subtitle">单选、名词解释、简答与案例分析 · 文本框作答 · 查看参考答案 · 题目图片直显 · 继续上次 · 题号定位</p>
+        </div>
+        <div class="stats">
+          <span id="totalBadge" class="badge">总题：0</span>
+          <span id="doneBadge" class="badge">已作答：0</span>
+          <span id="wrongBadge" class="badge danger">错题：0</span>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <select id="typeFilter" aria-label="题型筛选">
+          <option value="all">全部题型</option>
+          <option value="single">单选题</option>
+          <option value="definition">名词解释</option>
+          <option value="short">简答题</option>
+          <option value="case">案例分析</option>
+        </select>
+        <select id="modeSelect" aria-label="练习模式">
+          <option value="sequence">顺序练习</option>
+          <option value="random">随机练习</option>
+        </select>
+        <select id="statusFilter" aria-label="作答状态">
+          <option value="all">全部题目</option>
+          <option value="wrong">只看错题</option>
+          <option value="answered">已作答题</option>
+          <option value="unanswered">未作答题</option>
+        </select>
+        <select id="answerFilter" aria-label="结果筛选">
+          <option value="all">全部结果</option>
+          <option value="correct">答对题</option>
+          <option value="incorrect">答错题</option>
+        </select>
+        <button id="resumeBtn" class="secondary" type="button">继续上次</button>
+        <button id="restartBtn" type="button">重新刷题</button>
+      </div>
+
+      <div class="jump-row">
+        <input id="jumpInput" type="number" min="1" placeholder="输入题号定位，例如 121" />
+        <button id="jumpBtn" class="secondary" type="button">定位题号</button>
+        <button id="exportBtn" type="button">导出记录</button>
+        <button id="importBtn" type="button">导入记录</button>
+        <button id="clearBtn" class="danger-btn" type="button">清空记录</button>
+        <input id="importFile" type="file" accept="application/json,.json" class="hidden" />
+      </div>
+    </header>
+
+    <main>
+      <div id="emptyState" class="empty hidden"></div>
+
+      <section id="questionCard" class="card">
+        <div class="meta">
+          <span id="progressText">第 1 / 1 题</span>
+          <span id="globalIdTag" class="tag">题号 1</span>
+          <span id="typeTag" class="tag">单选题</span>
+          <span id="statusTag" class="tag">未作答</span>
+        </div>
+
+        <div id="questionTitle" class="question-title"></div>
+
+        <section id="questionImageWrap" class="question-images hidden" aria-label="题目图片">
+          <div id="questionImages" class="image-grid"></div>
+        </section>
+
+        <form id="optionsForm" class="options"></form>
+
+        <div id="subjectiveWrap" class="subjective-wrap hidden">
+          <label for="subjectiveInput" class="answer-label">我的作答</label>
+          <textarea id="subjectiveInput" rows="9" placeholder="请输入你的答案，内容会自动保存在当前设备浏览器中。"></textarea>
+          <div class="draft-tip">输入内容会自动保存为草稿；点击“保存作答”后才会标记为已作答。</div>
+        </div>
+
+        <section id="referencePanel" class="reference hidden" aria-live="polite">
+          <div class="reference-title">参考答案</div>
+          <div id="referenceText" class="reference-text"></div>
+        </section>
+
+        <div id="feedback" class="answer-status"></div>
+
+        <div class="actions">
+          <button id="prevBtn" type="button">上一题</button>
+          <button id="nextBtn" type="button">下一题</button>
+          <button id="retryBtn" type="button">重新作答本题</button>
+          <button id="showAnswerBtn" type="button" class="secondary">查看参考答案</button>
+          <button id="submitBtn" type="button" class="primary">提交答案</button>
+        </div>
+
+        <div class="small-note">提示：记录保存在当前设备浏览器中；换浏览器或换网址时，可使用“导出记录 / 导入记录”。名词解释、简答题和案例分析均提供文本框、保存作答及“查看参考答案”；主观题不进行自动评分。</div>
+      </section>
+    </main>
+  </div>
+
+  <script src="./questions.js"></script>
+  <script>
+    (() => {
+      const QUESTIONS = Array.isArray(window.QUESTION_BANK) ? window.QUESTION_BANK : [];
+      // 保持原存储键不变，以兼容此前已保存的单选题记录。
+      const STORAGE_KEY = "zhongyao_huaxue_jishu_question_bank_state_v1";
+      const el = (id) => document.getElementById(id);
+
+      const typeFilter = el("typeFilter");
+      const modeSelect = el("modeSelect");
+      const statusFilter = el("statusFilter");
+      const answerFilter = el("answerFilter");
+      const resumeBtn = el("resumeBtn");
+      const restartBtn = el("restartBtn");
+      const jumpInput = el("jumpInput");
+      const jumpBtn = el("jumpBtn");
+      const exportBtn = el("exportBtn");
+      const importBtn = el("importBtn");
+      const importFile = el("importFile");
+      const clearBtn = el("clearBtn");
+      const totalBadge = el("totalBadge");
+      const doneBadge = el("doneBadge");
+      const wrongBadge = el("wrongBadge");
+      const emptyState = el("emptyState");
+      const questionCard = el("questionCard");
+      const progressText = el("progressText");
+      const globalIdTag = el("globalIdTag");
+      const typeTag = el("typeTag");
+      const statusTag = el("statusTag");
+      const questionTitle = el("questionTitle");
+      const questionImageWrap = el("questionImageWrap");
+      const questionImages = el("questionImages");
+      const optionsForm = el("optionsForm");
+      const subjectiveWrap = el("subjectiveWrap");
+      const subjectiveInput = el("subjectiveInput");
+      const referencePanel = el("referencePanel");
+      const referenceText = el("referenceText");
+      const feedback = el("feedback");
+      const prevBtn = el("prevBtn");
+      const nextBtn = el("nextBtn");
+      const retryBtn = el("retryBtn");
+      const showAnswerBtn = el("showAnswerBtn");
+      const submitBtn = el("submitBtn");
+
+      let state = loadState();
+      let list = [];
+      let currentIndex = 0;
+      let referenceShown = false;
+      let draftTimer = null;
+
+      function defaultState() {
+        return { records: {}, drafts: {}, lastSubmittedId: null, lastViewedId: null, randomOrder: [] };
+      }
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          const parsed = raw ? JSON.parse(raw) : {};
+          return Object.assign(defaultState(), parsed, { records: parsed.records || {}, drafts: parsed.drafts || {} });
+        } catch (e) { return defaultState(); }
+      }
+      function saveState() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      function escapeHtml(value) {
+        return String(value ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+      }
+      function nl2br(value) { return escapeHtml(value).replace(/\n/g, "<br>"); }
+      function renderQuestionImages(q) {
+        const images = Array.isArray(q.images) ? q.images : [];
+        questionImages.innerHTML = "";
+        questionImageWrap.classList.toggle("hidden", images.length === 0);
+        if (!images.length) return;
+        questionImages.innerHTML = images.map((image) => `
+          <figure class="question-image-card">
+            <img src="${escapeHtml(image.src || "")}" alt="${escapeHtml(image.alt || image.caption || "题目图片")}" loading="lazy" />
+            ${image.caption ? `<figcaption>${escapeHtml(image.caption)}</figcaption>` : ""}
+          </figure>
+        `).join("");
+      }
+      function shuffle(items) {
+        const arr = [...items];
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      }
+      function getRecord(id) { return state.records[String(id)] || null; }
+      function setRecord(id, rec) { state.records[String(id)] = rec; saveState(); }
+      function getDraft(id) { return state.drafts[String(id)] || ""; }
+      function setDraft(id, text) {
+        state.drafts[String(id)] = text;
+        saveState();
+      }
+      function labelForType(type) {
+        return ({single:"单选题", definition:"名词解释", short:"简答题", case:"案例分析"})[type] || "题目";
+      }
+      function isObjective(q) { return q.type === "single"; }
+      function isCorrect(selected, answer) { return [...selected].sort().join(",") === [...answer].sort().join(","); }
+      function normalizeList() {
+        const status = statusFilter.value;
+        const result = answerFilter.value;
+        const type = typeFilter.value;
+        let filtered = QUESTIONS.filter((q) => {
+          const rec = getRecord(q.id);
+          if (type !== "all" && q.type !== type) return false;
+          if (status === "wrong" && (!rec || rec.correct !== false)) return false;
+          if (status === "answered" && !rec) return false;
+          if (status === "unanswered" && rec) return false;
+          if (result === "correct" && (!rec || rec.correct !== true)) return false;
+          if (result === "incorrect" && (!rec || rec.correct !== false)) return false;
+          return true;
+        });
+        if (modeSelect.value === "random") {
+          const ids = filtered.map(q => q.id);
+          const validStored = Array.isArray(state.randomOrder) && state.randomOrder.length === ids.length && state.randomOrder.every(id => ids.includes(id));
+          const order = validStored ? state.randomOrder : shuffle(ids);
+          state.randomOrder = order;
+          saveState();
+          const byId = new Map(filtered.map(q => [q.id, q]));
+          filtered = order.map(id => byId.get(id)).filter(Boolean);
+        }
+        list = filtered;
+        currentIndex = Math.min(currentIndex, Math.max(list.length - 1, 0));
+      }
+      function buildList({ keepCurrentId = null } = {}) {
+        normalizeList();
+        if (keepCurrentId != null) {
+          const idx = list.findIndex(q => q.id === keepCurrentId);
+          currentIndex = idx >= 0 ? idx : 0;
+        } else currentIndex = 0;
+        render();
+      }
+      function currentQuestion() { return list[currentIndex] || null; }
+      function updateBadges() {
+        const records = Object.values(state.records || {});
+        const wrong = records.filter(r => r && r.correct === false).length;
+        totalBadge.textContent = `总题：${QUESTIONS.length}`;
+        doneBadge.textContent = `已作答：${records.length}`;
+        wrongBadge.textContent = `错题：${wrong}`;
+      }
+      function recordStatus(q, rec) {
+        if (!rec) return getDraft(q.id) ? "草稿未保存" : "未作答";
+        if (isObjective(q)) return `已作答 · ${rec.correct ? "正确" : "错误"} · 第 ${rec.count || 1} 次`;
+        return `已作答 · 第 ${rec.count || 1} 次`;
+      }
+      function render() {
+        updateBadges();
+        referenceShown = false;
+        const q = currentQuestion();
+        if (!q) {
+          questionCard.classList.add("hidden");
+          emptyState.classList.remove("hidden");
+          emptyState.textContent = "当前筛选条件下没有题目。可以切回“全部题目”。";
+          return;
+        }
+        questionCard.classList.remove("hidden");
+        emptyState.classList.add("hidden");
+        state.lastViewedId = q.id;
+        saveState();
+        const rec = getRecord(q.id);
+        progressText.textContent = `第 ${currentIndex + 1} / ${list.length} 题`;
+        globalIdTag.textContent = q.displayNo || `题号 ${q.id}`;
+        typeTag.textContent = labelForType(q.type);
+        statusTag.textContent = recordStatus(q, rec);
+        questionTitle.textContent = q.question;
+        renderQuestionImages(q);
+        feedback.className = "answer-status";
+        feedback.innerHTML = "";
+        referencePanel.classList.add("hidden");
+        referenceText.innerHTML = "";
+        showAnswerBtn.textContent = "查看参考答案";
+
+        if (isObjective(q)) {
+          optionsForm.classList.remove("hidden");
+          subjectiveWrap.classList.add("hidden");
+          submitBtn.textContent = "提交答案";
+          const selected = rec ? rec.selected || [] : [];
+          optionsForm.innerHTML = Object.entries(q.options).map(([key,value]) => `
+            <label class="option" data-key="${escapeHtml(key)}">
+              <input type="radio" name="answer" value="${escapeHtml(key)}" ${selected.includes(key) ? "checked" : ""} ${rec ? "disabled" : ""} />
+              <span class="option-key">${escapeHtml(key)}.</span>
+              <span>${escapeHtml(value)}</span>
+            </label>`).join("");
+          if (rec) showObjectiveResult(q, rec.selected || [], rec.correct, true);
+        } else {
+          optionsForm.classList.add("hidden");
+          optionsForm.innerHTML = "";
+          subjectiveWrap.classList.remove("hidden");
+          submitBtn.textContent = "保存作答";
+          subjectiveInput.value = rec?.response ?? getDraft(q.id);
+          subjectiveInput.disabled = false;
+          if (rec) {
+            feedback.className = "answer-status show ok";
+            feedback.innerHTML = `<strong>已保存作答。</strong> 你可以点击“查看参考答案”进行对照。`;
+          }
+        }
+      }
+      function selectedAnswers() { return [...optionsForm.querySelectorAll("input:checked")].map(i => i.value); }
+      function showObjectiveResult(q, selected, correct, fromRecord = false) {
+        [...optionsForm.querySelectorAll("input")].forEach(input => {
+          input.disabled = true;
+          const option = input.closest(".option");
+          option.classList.remove("correct", "wrong");
+          if (q.answer.includes(input.value)) option.classList.add("correct");
+          else if (selected.includes(input.value)) option.classList.add("wrong");
+        });
+        feedback.className = `answer-status show ${correct ? "ok" : "err"}`;
+        feedback.innerHTML = correct
+          ? `<strong>${fromRecord ? "已作答正确。" : "回答正确！"}</strong> 正确答案：${q.answer.join("、")}`
+          : `<strong>${fromRecord ? "已作答错误。" : "回答错误。"}</strong> 正确答案：${q.answer.join("、")}`;
+      }
+      function showReference() {
+        const q = currentQuestion();
+        if (!q) return;
+        referenceShown = !referenceShown;
+        referencePanel.classList.toggle("hidden", !referenceShown);
+        showAnswerBtn.textContent = referenceShown ? "收起参考答案" : "查看参考答案";
+        if (!referenceShown) return;
+        if (isObjective(q)) {
+          const answerText = q.answer.map(k => `${k}. ${q.options[k] || ""}`).join("\n");
+          referenceText.innerHTML = nl2br(answerText);
+        } else {
+          referenceText.innerHTML = nl2br(q.answerText || "暂无参考答案。");
+        }
+      }
+      function submit() {
+        const q = currentQuestion();
+        if (!q) return;
+        const old = getRecord(q.id);
+        if (isObjective(q)) {
+          const selected = selectedAnswers();
+          if (!selected.length) {
+            feedback.className = "answer-status show err";
+            feedback.textContent = "请先选择一个答案。";
+            return;
+          }
+          const correct = isCorrect(selected, q.answer);
+          const rec = { selected, correct, count: old ? (old.count || 1) + 1 : 1, lastAt: new Date().toISOString(), kind: "single" };
+          setRecord(q.id, rec);
+          state.lastSubmittedId = q.id;
+          saveState();
+          statusTag.textContent = recordStatus(q, rec);
+          showObjectiveResult(q, selected, correct, false);
+        } else {
+          const response = subjectiveInput.value.trim();
+          if (!response) {
+            feedback.className = "answer-status show err";
+            feedback.textContent = "请先在文本框中输入你的作答。";
+            return;
+          }
+          const rec = { response, correct: null, count: old ? (old.count || 1) + 1 : 1, lastAt: new Date().toISOString(), kind: "subjective" };
+          setRecord(q.id, rec);
+          delete state.drafts[String(q.id)];
+          state.lastSubmittedId = q.id;
+          saveState();
+          statusTag.textContent = recordStatus(q, rec);
+          feedback.className = "answer-status show ok";
+          feedback.innerHTML = "<strong>已保存作答。</strong> 你可以点击“查看参考答案”进行对照。";
+        }
+        updateBadges();
+      }
+      function retry() {
+        const q = currentQuestion();
+        if (!q) return;
+        feedback.className = "answer-status";
+        feedback.innerHTML = "";
+        if (isObjective(q)) {
+          [...optionsForm.querySelectorAll("input")].forEach(input => {
+            input.disabled = false;
+            input.checked = false;
+            input.closest(".option").classList.remove("correct", "wrong");
+          });
+        } else {
+          subjectiveInput.value = "";
+          delete state.drafts[String(q.id)];
+          saveState();
+          subjectiveInput.focus();
+        }
+        statusTag.textContent = getRecord(q.id) ? "重新作答中" : "未作答";
+      }
+      function saveDraftFromInput() {
+        const q = currentQuestion();
+        if (!q || isObjective(q)) return;
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(() => {
+          setDraft(q.id, subjectiveInput.value);
+          if (!getRecord(q.id)) statusTag.textContent = subjectiveInput.value.trim() ? "草稿未保存" : "未作答";
+        }, 180);
+      }
+      function go(delta) {
+        if (!list.length) return;
+        currentIndex = (currentIndex + delta + list.length) % list.length;
+        render();
+      }
+      function restart() {
+        if (modeSelect.value === "random") {
+          state.randomOrder = [];
+          saveState();
+        }
+        buildList();
+      }
+      function resume() {
+        const id = state.lastSubmittedId || state.lastViewedId;
+        if (!id) { buildList(); return; }
+        typeFilter.value = "all";
+        statusFilter.value = "all";
+        answerFilter.value = "all";
+        modeSelect.value = "sequence";
+        normalizeList();
+        const idx = list.findIndex(q => q.id === id);
+        currentIndex = idx >= 0 ? idx : 0;
+        render();
+      }
+      function jumpToQuestion() {
+        const id = Number(jumpInput.value);
+        if (!Number.isInteger(id) || !QUESTIONS.some(q => q.id === id)) {
+          alert(`请输入 1 到 ${QUESTIONS.length} 之间的有效题号。`);
+          return;
+        }
+        typeFilter.value = "all";
+        statusFilter.value = "all";
+        answerFilter.value = "all";
+        modeSelect.value = "sequence";
+        normalizeList();
+        const idx = list.findIndex(q => q.id === id);
+        currentIndex = idx >= 0 ? idx : 0;
+        render();
+      }
+      function exportRecords() {
+        const payload = { title: "中药化学技术题库记录", version: 2, exportedAt: new Date().toISOString(), state };
+        const blob = new Blob([JSON.stringify(payload, null, 2)], {type:"application/json"});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `中药化学技术题库记录_${new Date().toISOString().slice(0,10)}.json`;
+        document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+      }
+      function importRecords(file) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            const imported = data.state || data;
+            if (!imported || typeof imported !== "object") throw new Error("invalid");
+            state = Object.assign(defaultState(), imported, {records: imported.records || {}, drafts: imported.drafts || {}});
+            saveState();
+            buildList({keepCurrentId: state.lastSubmittedId || state.lastViewedId});
+            alert("记录导入成功。");
+          } catch (e) { alert("导入失败：请选择本题库导出的 JSON 记录文件。"); }
+        };
+        reader.readAsText(file);
+      }
+      function updateListForCurrent() { buildList({keepCurrentId: currentQuestion()?.id}); }
+
+      typeFilter.addEventListener("change", updateListForCurrent);
+      modeSelect.addEventListener("change", () => { state.randomOrder = []; saveState(); updateListForCurrent(); });
+      statusFilter.addEventListener("change", updateListForCurrent);
+      answerFilter.addEventListener("change", updateListForCurrent);
+      resumeBtn.addEventListener("click", resume);
+      restartBtn.addEventListener("click", restart);
+      jumpBtn.addEventListener("click", jumpToQuestion);
+      jumpInput.addEventListener("keydown", (e) => { if (e.key === "Enter") jumpToQuestion(); });
+      exportBtn.addEventListener("click", exportRecords);
+      importBtn.addEventListener("click", () => importFile.click());
+      importFile.addEventListener("change", (e) => { const file=e.target.files?.[0]; if (file) importRecords(file); e.target.value=""; });
+      clearBtn.addEventListener("click", () => { if (confirm("确定清空本设备当前浏览器中的全部作答记录和草稿吗？")) { state=defaultState(); saveState(); buildList(); } });
+      prevBtn.addEventListener("click", () => go(-1));
+      nextBtn.addEventListener("click", () => go(1));
+      retryBtn.addEventListener("click", retry);
+      showAnswerBtn.addEventListener("click", showReference);
+      submitBtn.addEventListener("click", submit);
+      subjectiveInput.addEventListener("input", saveDraftFromInput);
+
+      buildList();
+    })();
+  </script>
+</body>
+</html>
