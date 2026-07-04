@@ -428,6 +428,11 @@
         normalizeList();
         const idx = list.findIndex(q => q.id === id);
         currentIndex = idx >= 0 ? idx : 0;
+
+        // 定位成功后清空输入框，方便继续输入下一道题号。
+        jumpInput.value = "";
+        jumpInput.blur();
+
         render();
       }
       function exportRecords() {
